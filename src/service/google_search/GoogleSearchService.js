@@ -10,30 +10,34 @@ class GoogleSearchService {
         this.communicateStateReady();
     }
 
-    prepareServiceInterface(serviceInterface) {
-        this.service = (new SenecaServiceInterface()).create({
-            port: '8271',
-            pin: 'request:data,google:search'
+    prepareServiceInterface(ServiceInterface) {
+        console.log('GoogleSearchService:prepareServiceInterface');
+        this.service = new ServiceInterface();
+
+        this.service.create({
+            port: '8271'
         });
 
-        this.service.add({
-            request: 'data',
-            google: 'search',
-        }, this.onRequestSearchData.bind(this));
+        this.service.add('role:request,cmd:search', this.onRequestSearchData.bind(this));
     }
 
     communicateStateReady() {
+        console.log('GoogleSearchService:communicateStateReady');
         process.send({
             state: 'ready'
         });
     }
 
-    onRequestSearchData(msg, done) {
-        const search = msg.search;
+    onRequestSearchData(msg, reply) {
+        console.log('GoogleSearchService:onRequestSearchData', {
+            msg
+        });
+
+        const search = msg.data;
 
         //this.requestData(search);
 
-        done(null, {
+        reply(null, {
             search,
             results: {
                 total: 290000,
@@ -56,26 +60,26 @@ class GoogleSearchService {
     }
 
     requestData(search) {
-        this.scrapedData = false;
+        console.log('GoogleSearchService:requestData');
 
-        this.service
-            .client({
-                port: '8280',
-                pin: 'request:scrap'
-            })
-            .act({
-                request: 'scrap',
-                google: 'search',
-                search
-            }, this.onScrapReady.bind(this))
-    }
-
-    onScrapReady(scrapedData) {
-        console.log('onScrapReady', {
-            scrapedData
+        this.service.client({
+            port: '8280'
         });
 
-        this.scrapedData = scrapedData;
+        this.service.act({
+            role: 'request',
+            cmd: 'scrap',
+            data: search
+        }, this.onScrapReady.bind(this))
+    }
+
+    onScrapReady(error, result) {
+        console.log('GoogleSearchService:onScrapReady', {
+            error,
+            result
+        });
+
+        this.scrapedData = result;
     }
 }
 

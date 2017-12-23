@@ -1,37 +1,38 @@
-import {
-  fork
-} from 'child_process';
 import SenecaServiceInterface from '../interface/SenecaServiceInterface'
 import CommandLineInterface from '../../interface/CommandLineInterface';
 
 class CliService {
   start() {
+    console.log('CliService:start');
     this.prepareServiceInterface(SenecaServiceInterface);
     this.prepareCli(CommandLineInterface);
     this.communicateStateReady();
   }
 
   prepareCli(CommandLineInterface) {
+    console.log('CliService:prepareCli');
     this.cli = new CommandLineInterface();
 
     this.cli.commandBuild('get <topic>', 'g', 'Get data about topic', this.requestTopicData.bind(this));
   }
 
   prepareServiceInterface(ServiceInterface) {
+    console.log('CliService:prepareServiceInterface', {
+      ServiceInterface
+    })
+
     this.service = new ServiceInterface();
-    
+
     this.service.create({
-      port: '8250',
-      pin: 'emit:data,medium:topic'
+      port: '8250'
     });
 
-    this.service.add({
-      emit: 'data',
-      medium: 'topic',
-    }, this.onTopicDataReady.bind(this));
+    this.service.add('role:emit,cmd:topic', this.onTopicDataReady.bind(this));
   }
 
   communicateStateReady() {
+    console.log('CliService:communicateStateReady');
+
     if (process.send) {
       process.send({
         state: 'ready'
@@ -44,10 +45,20 @@ class CliService {
       command
     });
 
-    const topic = command.topic;
+    const data = command.topic;
 
     try {
-      this.service.act('request:topic:,topic:' + topic, console.log);
+      this.service.client({
+        host: '127.0.0.1',
+        port: '8260',
+      });
+
+      this.service.act({
+        role: 'request',
+        cmd: 'topic',
+        data
+      }, console.log);
+
     } catch (error) {
       console.log('Hey! Be patient, we are building this shit', {
         error
@@ -57,14 +68,14 @@ class CliService {
 
   }
 
-  onTopicDataReady(msg) {
+  onTopicDataReady(msg, reply) {
     console.log('CliService:onTopicDataReady', {
-      command
+      msg
     });
 
-    const topicData = msg.topicData;
+    const topicData = msg.data;
 
-    console.log('Your final data is: ', {
+    reply(null, {
       topicData
     });
   }

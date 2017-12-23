@@ -2,36 +2,40 @@ import {
     fork
 } from 'child_process';
 import SenecaServiceInterface from '../interface/SenecaServiceInterface'
-const googleSearchService = fork('./bin/service/google-search.js');
+const googleSearchSubProcess = fork('./bin/service/google-search.js');
 
 class MediumTopicService {
     start() {
         console.log('MediumTopicService:start');
-        this.prepareGoogleSearchService(googleSearchService);
+        this.prepareGoogleSearchSubProcess(googleSearchSubProcess);
     }
 
-    prepareGoogleSearchService(googleSearchService) {
-        console.log('MediumTopicService:prepareGoogleSearchService');
-        googleSearchService.send('start');
-        googleSearchService.on('message', this.onGoogleSearchServiceReady.bind(this));
+    prepareGoogleSearchSubProcess(googleSearchSubProcess) {
+        console.log('MediumTopicService:prepareGoogleSearchSubProcess');
+        googleSearchSubProcess.send('start');
+        googleSearchSubProcess.on('message', this.onGoogleSearchServiceReady.bind(this));
     }
 
     onGoogleSearchServiceReady({
         state
     }) {
         console.log('MediumTopicService:onGoogleSearchServiceReady');
+
         if (state === 'ready') {
             this.prepareServiceInterface(SenecaServiceInterface);
             this.communicateStateReady();
         }
     }
-    prepareServiceInterface(serviceInterface) {
+    prepareServiceInterface(ServiceInterface) {
         console.log('MediumTopicService:prepareServiceInterface');
-        this.service = (new SenecaServiceInterface()).create({
+
+        this.service = new ServiceInterface();
+
+        this.service.create({
             port: '8260'
         });
 
-        this.service.add('request:topic,topic:*', this.onRequestTopicData.bind(this));
+        this.service.add('role:request,cmd:topic', this.onRequestTopicData.bind(this));
     }
     communicateStateReady() {
         console.log('MediumTopicService:communicateStateReady');
@@ -40,17 +44,19 @@ class MediumTopicService {
                 state: 'ready'
             });
         } else {
-            console.log('ERROR', process.send)
+            console.error('ERROR', process.send)
         }
     }
 
-    onRequestTopicData(msg, done) {
+    onRequestTopicData(msg, reply) {
         console.log('MediumTopicService:onRequestTopicData');
-        const topic = msg.topic;
+        const topic = msg.data;
 
         this.requestData(topic);
 
-        done(null, topicData);
+        reply(null, {
+            topic
+        });
     }
 
     requestData(topic) {
@@ -61,33 +67,63 @@ class MediumTopicService {
     }
 
     requestDataToGoogleService(search) {
-        console.log('MediumTopicService:requestDataToGoogleService');
-        this.service
-            .client({
-                port: '8270',
-                pin: 'request:data,google:search'
-            })
-            .act({
-                request: 'data',
-                google: 'search',
-                search
-            }, this.onDataReadyEmitTopic.bind(this));
+        console.log('MediumTopicService:requestDataToGoogleService', {
+            search
+        });
+
+        this.service.client({
+            host: '127.0.0.1',
+            port: '8271'
+        });
+
+        this.service.act({
+            role: 'request',
+            cmd: 'search',
+            data: search
+        }, this.onDataReadyEmitTopic.bind(this));
     }
 
-    onDataReadyEmitTopic(msg) {
-        console.log('MediumTopicService:onDataReadyEmitTopic');
-        const searchData = msg.searchData;
+    onDataReadyEmitTopic(error, result) {
+        console.log('MediumTopicService:onDataReadyEmitTopic', {
+            error,
+            result
+        });
 
-        this.service
-            .client({
-                port: '8270',
-                pin: 'emit:data,medium:topic'
-            })
-            .act({
-                emit: 'data',
-                medium: 'topic',
-                searchData
+        if (error) {
+            return console.error(error);
+        }
+
+        const searchData = result;
+
+        this.service.client({
+            host: '127.0.0.1',
+            port: '8250'
+        });
+
+        this.service.act({
+            role: 'emit',
+            cmd: 'topic',
+            data: searchData
+        }, this.onMediumTopicEmited.bind(this));
+    }
+
+    onMediumTopicEmited(error, result) {
+        console.log('MediumTopicService:onMediumTopicEmited', {
+            error,
+            result
+        });
+
+        if (error) {
+            return console.error({
+                error
             });
+        }
+
+        const topicData = result.topicData;
+
+        console.log('Your final data is: ', {
+            topicData
+        });
     }
 }
 

@@ -22,7 +22,7 @@ class SenecaServiceInterface {
     }
 
     client(config) {
-        return this.seneca.listen(config);
+        return this.seneca.client(config);
     }
 
     act(message, callback) {
